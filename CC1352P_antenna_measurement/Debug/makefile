@@ -148,7 +148,7 @@ all: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 CC1352P_antenna_measurement.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: Arm Linker'
-	"C:/ti/ccs1120/ccs/tools/compiler/ti-cgt-arm_20.2.5.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me -O3 --define=DeviceFamily_CC13X2 -g --diag_warning=225 --diag_warning=255 --diag_wrap=off --display_error_number --gen_func_subsections=on -z -m"CC1352P_antenna_measurement.map" -i"C:/ti/simplelink_cc13xx_cc26xx_sdk_6_10_00_29/source" -i"C:/ti/simplelink_cc13xx_cc26xx_sdk_6_10_00_29/kernel/tirtos7/packages" -i"C:/Users/oskar/workspace_v11/CC1352P_antenna_measurement/Debug/syscfg" -i"C:/ti/ccs1120/ccs/tools/compiler/ti-cgt-arm_20.2.5.LTS/lib" --diag_wrap=off --display_error_number --warn_sections --xml_link_info="CC1352P_antenna_measurement_linkInfo.xml" --rom_model -o "CC1352P_antenna_measurement.out" $(ORDERED_OBJS)
+	"C:/ti/ccs1120/ccs/tools/compiler/ti-cgt-arm_20.2.5.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me -O3 --define=DeviceFamily_CC13X2 -g --diag_warning=225 --diag_warning=255 --diag_wrap=off --display_error_number --gen_func_subsections=on -z -m"CC1352P_antenna_measurement.map" -i"C:/ti/simplelink_cc13xx_cc26xx_sdk_6_10_00_29/source" -i"C:/ti/simplelink_cc13xx_cc26xx_sdk_6_10_00_29/kernel/tirtos7/packages" -i"C:/git/CC1352PAntennaMeasurement/CC1352P_antenna_measurement/Debug/syscfg" -i"C:/ti/ccs1120/ccs/tools/compiler/ti-cgt-arm_20.2.5.LTS/lib" --diag_wrap=off --display_error_number --warn_sections --xml_link_info="CC1352P_antenna_measurement_linkInfo.xml" --rom_model -o "CC1352P_antenna_measurement.out" $(ORDERED_OBJS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 

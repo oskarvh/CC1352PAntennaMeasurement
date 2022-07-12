@@ -80,27 +80,13 @@ static uint8_t packetLength;
 static uint8_t* packetDataPointer;
 static uint8_t rxPacket[MAX_LENGTH + NUM_APPENDED_BYTES - 1]; /* The length byte is stored in a separate variable */
 static int8_t RSSI = -80;
-/*
- *  ======== callbackFxn ========
- */
-void callbackFxn(UART2_Handle handle, void *buffer, size_t count,
-        void *userArg, int_fast16_t status)
-{
-    if (status != UART2_STATUS_SUCCESS) {
-        /* RX error occured in UART2_read() */
-        while (1);
-    }
-
-    numBytesRead = count;
-    sem_post(&sem);
-}
 
 /*
  * Function to parse the input string from the UART console
  * Return true if parsing was OK, false if parsing wasn't OK
  */
 bool parseInputString(char *string, uint32_t *frequency, uint8_t *tx){
-    uint32_t freq = 0;
+
     if(string[0] == 'R' && string[1] == 'X'){
         // Set to transmit
         *tx = 0;
@@ -134,7 +120,7 @@ bool parseInputString(char *string, uint32_t *frequency, uint8_t *tx){
 
 }
 
-/* RF RX Callback */
+/* RF RX Callback, handles the data extraction from the queue */
 void callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 {
     if (e & RF_EventRxEntryDone)
@@ -165,51 +151,36 @@ void *mainThread(void *arg0)
     const char        echoPrompt[] = "Start Program\r\n";
     UART2_Handle      uart;
     UART2_Params      uartParams;
-    int32_t           semStatus;
     uint32_t          status = UART2_STATUS_SUCCESS;
     uint8_t           tx = false; // if tx = 1, then send packet. If 0, then receive packet.
     uint32_t          freq = 0;   // Frequency to transmit/receive on.
     volatile RF_EventMask terminationReason; // To keep track of termination reasons.
-
     RF_Params rfParams;
     RF_Params_init(&rfParams);
 
-
-
-    /* Call driver init functions */
+    // Call driver init functions
     GPIO_init();
 
-    /* Configure the LED pin */
+    // Configure the LED pin
     GPIO_setConfig(CONFIG_GPIO_LED_0, GPIO_CFG_OUT_STD | GPIO_CFG_OUT_LOW);
 
-    /* Create semaphore */
-    semStatus = sem_init(&sem, 0, 0);
-
-    if (semStatus != 0) {
-        /* Error creating semaphore */
-        while (1);
-    }
-
-    /* Create a UART in CALLBACK read mode */
+    // Create a UART in blocking mode.
     UART2_Params_init(&uartParams);
     uartParams.readMode = UART2_Mode_BLOCKING;
-    uartParams.readCallback = callbackFxn;
     uartParams.baudRate = 115200;
     uartParams.readReturnMode = UART2_ReadReturnMode_FULL;
 
-
+    // Open the UART
     uart = UART2_open(CONFIG_UART2_0, &uartParams);
 
     if (uart == NULL) {
-        /* UART2_open() failed */
+        // UART2_open() failed
         while (1);
     }
 
     rfHandle = RF_open(&rfObject, &RF_prop_custom2400_1, (RF_RadioSetup*)&RF_cmdPropRadioDivSetup_custom2400_1, &rfParams);
-    /* Turn on user LED to indicate successful initialization */
-    GPIO_write(CONFIG_GPIO_LED_0, CONFIG_GPIO_LED_ON);
 
-    /* Pass NULL for bytesWritten since it's not used in this example */
+    // Pass NULL for bytesWritten since it's not used in this example
     UART2_write(uart, echoPrompt, sizeof(echoPrompt), NULL);
 
     if( RFQueue_defineQueue(&dataQueue,
@@ -218,32 +189,29 @@ void *mainThread(void *arg0)
                             NUM_DATA_ENTRIES,
                             MAX_LENGTH + NUM_APPENDED_BYTES))
     {
-        /* Failed to allocate space for all data entries */
+        // Failed to allocate space for all data entries
         while(1);
     }
-    /* Loop forever echoing */
+    // Loop forever echoing
     while (1) {
         numBytesRead = 0;
 
-        /* Pass NULL for bytesRead since it's not used in this example */
-        //status = UART2_read(uart, &input, 1, NULL);
+        // Wait for either the UART buffer to be full, or RX timeout.
         status = UART2_readTimeout(uart, input, 8, &numBytesRead, 1000000);
-        // UART2_STATUS_ETIMEOUT
+
+        // Check if timeout happended, in which case report timeout
         if(status == UART2_STATUS_ETIMEOUT){
             UART2_flushRx(uart);
             sprintf(error, "ERROR UART TIMEOUT\r\n");
             status = UART2_write(uart, &error, 20, NULL);
             if (status != UART2_STATUS_SUCCESS) {
-                /* UART2_write() failed */
+                // UART2_write() failed
                 while (1);
             }
             continue;
         }
-        if (status != UART2_STATUS_SUCCESS) {
-            /* UART2_read() failed */
-            while (1);
-        }
-
+        // Turn on user LED to indicate successful initialization
+        GPIO_write(CONFIG_GPIO_LED_0, CONFIG_GPIO_LED_ON);
 
         /* Parse the input
          * The input is string based, and the input follows the following format:
@@ -263,11 +231,10 @@ void *mainThread(void *arg0)
                 // Error: wasn't able to parse string
                 // Flush the RX buffer
                 UART2_flushRx(uart);
-                //error="ERROR UART\r\n";
                 sprintf(error, "ERROR UART TIMEOUT\r\n");
                 status = UART2_write(uart, &error, 20, NULL);
                 if (status != UART2_STATUS_SUCCESS) {
-                    /* UART2_write() failed */
+                    // UART2_write() failed
                     while (1);
                 }
                 continue;
@@ -279,7 +246,7 @@ void *mainThread(void *arg0)
                     sprintf(error, "ERROR FREQ\r\n");
                     status = UART2_write(uart, &error, 12, NULL);
                     if (status != UART2_STATUS_SUCCESS) {
-                        /* UART2_write() failed */
+                        // UART2_write() failed
                         while (1);
                     }
                     continue;
@@ -309,7 +276,7 @@ void *mainThread(void *arg0)
                 txPacket[i] = rand();
             }
 
-            /* Send packet */
+            // Send packet
             terminationReason = RF_runCmd(rfHandle, (RF_Op*)&RF_cmdPropTx_custom2400_1,
                                                        RF_PriorityNormal, NULL, 0);
 
@@ -370,22 +337,22 @@ void *mainThread(void *arg0)
             sprintf(error, "TX OK\r\n");
             status = UART2_write(uart, &error, 7, NULL);
             if (status != UART2_STATUS_SUCCESS) {
-                /* UART2_write() failed */
+                // UART2_write() failed
                 while (1);
             }
         }
         else{ // rx
             RF_cmdPropRx_custom2400_1.rxConf.bAppendRssi = 1;
             RF_cmdPropRx_custom2400_1.pQueue = &dataQueue;
-            /* Discard ignored packets from Rx queue */
+            // Discard ignored packets from Rx queue
             RF_cmdPropRx_custom2400_1.rxConf.bAutoFlushIgnored = 1;
-            /* Discard packets with CRC error from Rx queue */
+            // Discard packets with CRC error from Rx queue
             RF_cmdPropRx_custom2400_1.rxConf.bAutoFlushCrcErr = 1;
-            /* Implement packet length filtering to avoid PROP_ERROR_RXBUF */
+            // Implement packet length filtering to avoid PROP_ERROR_RXBUF
             RF_cmdPropRx_custom2400_1.maxPktLen = MAX_LENGTH;
             RF_cmdPropRx_custom2400_1.pktConf.bRepeatOk = 0;
             RF_cmdPropRx_custom2400_1.pktConf.bRepeatNok = 0;
-            /* Timeout for RX packets */
+            // Timeout for RX packets
             RF_cmdPropRx_custom2400_1.endTime = RF_RAT_TICKS_PER_US*10000000; // wait 10 seconds
             RF_cmdPropRx_custom2400_1.endTrigger.triggerType = TRIG_REL_SUBMIT;
             terminationReason = RF_runCmd(rfHandle, (RF_Op*)&RF_cmdPropRx_custom2400_1,
@@ -474,10 +441,11 @@ void *mainThread(void *arg0)
                     while(1);
             }
             if (status != UART2_STATUS_SUCCESS) {
-                /* UART2_write() failed */
+                // UART2_write() failed
                 while (1);
             }
         }
-
+        // Turn the LED off when packet was sent/received
+        GPIO_write(CONFIG_GPIO_LED_0, CONFIG_GPIO_LED_OFF);
     }
 }
